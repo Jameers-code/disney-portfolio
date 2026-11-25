@@ -13,7 +13,7 @@ export function useLenis(enabled: boolean) {
     if (!enabled || prefersReducedMotion() || prefersNativeTouchScroll()) return;
     // Keep Lenis for precise wheel/trackpad input; touch devices use native
     // momentum scrolling so the page remains directly connected to the finger.
-    const lenis = new Lenis({ duration: 0.72, smoothWheel: true, wheelMultiplier: 1, syncTouch: false });
+    const lenis = new Lenis({ duration: 0.82, smoothWheel: true, wheelMultiplier: 1, syncTouch: false });
     ref.current = lenis;
     let raf = 0;
     const loop = (t: number) => {

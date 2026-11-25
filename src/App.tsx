@@ -1,4 +1,4 @@
-import { motion, useMotionValueEvent, useScroll, useTransform } from "framer-motion";
+import { motion, useMotionValueEvent, useScroll, useSpring, useTransform } from "framer-motion";
 import { useEffect, useRef } from "react";
 import { useLenis } from "./components/useLenis";
 import { SceneView } from "./components/Scenes";
@@ -7,6 +7,9 @@ import { FRAMES, scenes } from "./data/film";
 // ---- Dwell: the film slows down while content is fully on screen, so there's time to read ----
 const DWELL = 3.2; // how much longer the camera lingers on each scene
 const RAMP = 0.016;
+const useCinematicSpring = typeof window !== "undefined"
+  && !window.matchMedia("(pointer: coarse)").matches
+  && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const windows = scenes
   .filter((s) => s.kind !== "opening" && s.kind !== "contact")
   .map((s) => [s.at[0] + RAMP, s.at[1] - RAMP] as [number, number]);
@@ -37,7 +40,9 @@ export default function App() {
   const pos = useRef(0);
   const drawRaf = useRef(0);
   const { scrollYProgress: scrollRaw } = useScroll();
-  const scrollYProgress = useTransform(scrollRaw, toFilm);
+  const mappedProgress = useTransform(scrollRaw, toFilm);
+  const springProgress = useSpring(mappedProgress, { stiffness: 240, damping: 34, mass: 0.24, restDelta: 0.001 });
+  const scrollYProgress = useCinematicSpring ? springProgress : mappedProgress;
 
   const dim = useTransform(scrollYProgress, (v): number => {
     // softly dim the film behind whichever card is on screen, so content reads clearly

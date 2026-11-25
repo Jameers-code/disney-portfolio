@@ -30,6 +30,8 @@ function toFilm(u: number) {
 
 export default function App() {
   useLenis(true);
+  const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
+  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, isMobile ? 1.35 : 2);
   const canvas = useRef<HTMLCanvasElement>(null);
   const context = useRef<CanvasRenderingContext2D | null>(null);
   const pos = useRef(0);
@@ -48,8 +50,9 @@ export default function App() {
   const blobs = useRef<(Blob | undefined)[]>([]);
   const bmps = useRef(new Map<number, ImageBitmap>());
   const decoding = useRef(new Set<number>());
+  const requestFrames = useRef<() => void>(() => {});
   const dir = useRef(1);
-  const WIN = 22;
+  const WIN = isMobile ? 12 : 22;
   const here = () => Math.round(pos.current * (FRAMES - 1));
 
   const draw = () => {
@@ -95,45 +98,80 @@ export default function App() {
         if (decoding.current.size >= 4) break;
       }
     }
+    requestFrames.current();
   };
 
   useEffect(() => {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = pixelRatio();
     const set = window.innerWidth * dpr > 1400 ? "hd" : "sd";
-    const requested = new Array<boolean>(FRAMES).fill(false);
-    const coarse: number[] = [];
-    for (let k = 0; k < FRAMES; k += 8) coarse.push(k);
-    coarse.push(FRAMES - 1);
+    const cacheRadius = isMobile ? 20 : 34;
+    const maxConcurrent = isMobile ? 2 : 4;
+    const requested = new Set<number>();
+    const inFlight = new Map<number, AbortController>();
     let alive = true;
-    const pick = () => {
-      const h0 = here();
-      for (let d = 0; d < 30; d++)
-        for (const k of [h0 + d * dir.current, h0 - d * dir.current]) if (k >= 0 && k < FRAMES && !requested[k]) return k;
-      const c = coarse.find((k) => !requested[k]);
-      if (c !== undefined) return c;
-      for (let d = 30; d < FRAMES; d++)
-        for (const k of [h0 + d * dir.current, h0 - d * dir.current]) if (k >= 0 && k < FRAMES && !requested[k]) return k;
+    const purgeDistantFrames = () => {
+      const current = here();
+      for (const k of requested) {
+        if (Math.abs(k - current) <= cacheRadius + 8) continue;
+        requested.delete(k);
+        inFlight.get(k)?.abort();
+        inFlight.delete(k);
+        blobs.current[k] = undefined;
+        const bitmap = bmps.current.get(k);
+        bitmap?.close();
+        bmps.current.delete(k);
+      }
+    };
+    const nextFrame = () => {
+      const current = here();
+      for (let distance = 0; distance <= cacheRadius; distance++) {
+        const candidates = distance === 0
+          ? [current]
+          : [current + distance * dir.current, current - distance * dir.current];
+        for (const k of candidates) {
+          if (k >= 0 && k < FRAMES && !requested.has(k)) return k;
+        }
+      }
       return -1;
     };
     const pump = () => {
       if (!alive) return;
-      const k = pick();
-      if (k < 0) return;
-      requested[k] = true;
-      fetch(`/film/${set}/f${String(k + 1).padStart(4, "0")}.webp?v=20261125-bareforehead3`)
-        .then((r) => r.blob())
-        .then((b) => {
-          blobs.current[k] = b;
-          if (Math.abs(k - here()) <= WIN) ensureBitmaps();
-        })
-        .catch(() => (requested[k] = false))
-        .finally(pump);
+      purgeDistantFrames();
+      while (alive && inFlight.size < maxConcurrent) {
+        const k = nextFrame();
+        if (k < 0) break;
+        requested.add(k);
+        const controller = new AbortController();
+        inFlight.set(k, controller);
+        fetch(`/film/${set}/f${String(k + 1).padStart(4, "0")}.webp?v=20261126-mobile-smooth1`, { signal: controller.signal })
+          .then((response) => {
+            if (!response.ok) throw new Error(`Frame ${k + 1} failed to load`);
+            return response.blob();
+          })
+          .then((blob) => {
+            if (!alive || Math.abs(k - here()) > cacheRadius + 8) return;
+            blobs.current[k] = blob;
+            if (Math.abs(k - here()) <= WIN) ensureBitmaps();
+          })
+          .catch(() => {
+            if (controller.signal.aborted) requested.delete(k);
+          })
+          .finally(() => {
+            inFlight.delete(k);
+            pump();
+          });
+      }
     };
-    for (let n = 0; n < 6; n++) pump();
+    requestFrames.current = pump;
+    pump();
     return () => {
       alive = false;
+      requestFrames.current = () => {};
+      inFlight.forEach((controller) => controller.abort());
+      inFlight.clear();
       bmps.current.forEach((b) => b.close());
       bmps.current.clear();
+      blobs.current = [];
     };
   }, []);
 
@@ -141,7 +179,7 @@ export default function App() {
     const resize = () => {
       const c = canvas.current;
       if (!c) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = pixelRatio();
       const width = Math.round(window.innerWidth * dpr);
       const height = Math.round(window.innerHeight * dpr);
       if (c.width !== width || c.height !== height) {

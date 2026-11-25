@@ -9,7 +9,7 @@ const RAMP = 0.016;
 function useEnvelope(p: MotionValue<number>, a: number, b: number, hold = false, travel = 50) {
   const end = hold ? 99 : b;
   const opacity = useTransform(p, [a, a + RAMP, end - RAMP, end], [0, 1, 1, 0]);
-  const blurV = useTransform(p, [a, a + RAMP * 1.3, end - RAMP, end], [5, 0, 0, 5]);
+  const blurV = useTransform(p, [a, a + RAMP * 1.3, end - RAMP, end], isPhone ? [0, 0, 0, 0] : [5, 0, 0, 5]);
   const filter = useTransform(blurV, (v) => `blur(${v}px)`);
   const y = useTransform(p, [a, hold ? a + 0.05 : end], [travel, hold ? 0 : -travel]);
   const scale = useTransform(p, [a, a + RAMP * 1.5, end - RAMP, end], [0.97, 1, 1, 1.05]);
@@ -22,7 +22,7 @@ function Beat({ p, a, i, children, className, as = "div" }: { p: MotionValue<num
   const s = a + 0.005 + i * 0.0028;
   const opacity = useTransform(p, [s, s + 0.012], [0, 1]);
   const y = useTransform(p, [s, s + 0.014], [18, 0]);
-  const blurV = useTransform(p, [s, s + 0.012], [2, 0]);
+  const blurV = useTransform(p, [s, s + 0.012], isPhone ? [0, 0] : [2, 0]);
   const filter = useTransform(blurV, (v) => `blur(${v}px)`);
   const M = motion[as];
   return (
@@ -46,7 +46,7 @@ function Letters({ text, p, a, span = 0.016, className }: { text: string; p: Mot
 function Letter({ c, p, s }: { c: string; p: MotionValue<number>; s: number }) {
   const opacity = useTransform(p, [s, s + 0.01], [0, 1]);
   const y = useTransform(p, [s, s + 0.014], ["0.5em", "0em"]);
-  const blurV = useTransform(p, [s, s + 0.012], [3, 0]);
+  const blurV = useTransform(p, [s, s + 0.012], isPhone ? [0, 0] : [3, 0]);
   const filter = useTransform(blurV, (v) => `blur(${v}px)`);
   return (
     <motion.span aria-hidden className="ltr" style={{ opacity, y, filter }}>
@@ -116,7 +116,7 @@ function SkillWord({ w: w0, p, a, b, i, n }: { w: Word; p: MotionValue<number>; 
   const s = a + 0.004 + (i % 7) * 0.003;
   const opacity = useTransform(p, [s, s + 0.012, b - 0.012, b], [0, w.label ? 1 : 0.95, w.label ? 1 : 0.95, 0]);
   const y = useTransform(p, [a, b], [60 * w.depth, -90 * w.depth]);
-  const blurV = useTransform(p, [s, s + 0.012, b - 0.012, b], [2, 0, 0, 2]);
+  const blurV = useTransform(p, [s, s + 0.012, b - 0.012, b], isPhone ? [0, 0, 0, 0] : [2, 0, 0, 2]);
   const filter = useTransform(blurV, (v) => `blur(${v}px)`);
   return (
     <motion.span
@@ -305,7 +305,7 @@ export function SceneView({ s, p }: { s: Scene; p: MotionValue<number> }) {
 /** Premium frosted glass: almost invisible edges, a specular sheen that slides as the camera moves. */
 function Glass({ p, a, b, wide, children }: { p: MotionValue<number>; a: number; b: number; wide?: boolean; children: ReactNode }) {
   const sheen = useTransform(p, [a, b], ["-60%", "160%"]);
-  const tilt = useTransform(p, [a, b], [4, -4]);
+  const tilt = useTransform(p, [a, b], isPhone ? [0, 0] : [4, -4]);
   return (
     <motion.div className={`glass ${wide ? "wide" : ""}`} style={{ rotateY: tilt }}>
       <motion.span className="glass-sheen" style={{ x: sheen }} />
